@@ -1,0 +1,129 @@
+package com.TaskManager.Service;
+
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.TaskManager.DTO.TaskCreateRequest;
+import com.TaskManager.DTO.TaskDTO;
+import com.TaskManager.DTO.TaskUpdateRequest;
+import com.TaskManager.Entity.Task;
+import com.TaskManager.Entity.User;
+import com.TaskManager.Exception.ResourceNotFoundException;
+import com.TaskManager.Repository.TaskRepository;
+import com.TaskManager.Repository.UserRepository;
+
+import lombok.RequiredArgsConstructor;
+
+@Service
+@RequiredArgsConstructor
+public class TaskService {
+
+    private final TaskRepository taskRepository;
+    private final UserRepository userRepository;
+
+    public TaskDTO toDto(Task t) {
+        return TaskDTO.builder()
+                .id(t.getId())
+                .title(t.getTitle())
+                .description(t.getDescription())
+                .status(t.getStatus())
+                .dueDate(t.getDueDate())
+                .ownerId(t.getOwner().getId())
+                .ownerName(t.getOwner().getName())
+                .createdAt(t.getCreatedAt())
+                .updatedAt(t.getUpdatedAt())
+                .build();
+    }
+
+    @Transactional
+    public TaskDTO createTask(TaskCreateRequest req, Long userId) {
+        User owner = userRepository.findById(userId).orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        Task task = Task.builder()
+                .title(req.getTitle())
+                .description(req.getDescription())
+                .dueDate(req.getDueDate())
+                .status(Task.Status.PENDING)
+                .owner(owner)
+                .build();
+        task = taskRepository.save(task);
+        return toDto(task);
+    }
+
+    public Page<TaskDTO> listTasksForUser(User requester, int page, int size, String statusFilter) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        Page<Task> tasksPage;
+        if (requester.getRole() == User.Role.ADMIN) {
+            if (statusFilter == null) {
+                tasksPage = taskRepository.findAll(pageable);
+            } else {
+                Task.Status status = Task.Status.valueOf(statusFilter.toUpperCase());
+                tasksPage = taskRepository.findByStatus(status, pageable);
+            }
+        } else {
+            if (statusFilter == null) {
+                tasksPage = taskRepository.findByOwner(requester, pageable);
+            } else {
+                Task.Status status = Task.Status.valueOf(statusFilter.toUpperCase());
+                tasksPage = taskRepository.findByOwnerAndStatus(requester, status, pageable);
+            }
+        }
+        return tasksPage.map(this::toDto);
+    }
+
+    public TaskDTO getTaskById(Long id, User requester) {
+        Task t = taskRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found with id: " + id));
+        if (!t.getOwner().getId().equals(requester.getId()) && requester.getRole() != User.Role.ADMIN) {
+            throw new ResourceNotFoundException("Task not found"); // hide existence
+        }
+        return toDto(t);
+    }
+
+    @Transactional
+    public TaskDTO updateTask(Long id, TaskUpdateRequest req, User requester) {
+        Task t = taskRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+
+        if (!t.getOwner().getId().equals(requester.getId()) && requester.getRole() != User.Role.ADMIN) {
+            throw new ResourceNotFoundException("Task not found");
+        }
+
+        if (req.getTitle() != null) t.setTitle(req.getTitle());
+        if (req.getDescription() != null) t.setDescription(req.getDescription());
+        if (req.getDueDate() != null) t.setDueDate(req.getDueDate());
+
+        taskRepository.save(t);
+        return toDto(t);
+    }
+
+    @Transactional
+    public void deleteTask(Long id, User requester) {
+        Task t = taskRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+
+        if (!t.getOwner().getId().equals(requester.getId()) && requester.getRole() != User.Role.ADMIN) {
+            throw new ResourceNotFoundException("Task not found");
+        }
+
+        taskRepository.delete(t);
+    }
+
+    @Transactional
+    public TaskDTO updateStatus(Long id, Task.Status status, User requester) {
+        Task t = taskRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+
+        if (!t.getOwner().getId().equals(requester.getId()) && requester.getRole() != User.Role.ADMIN) {
+            throw new ResourceNotFoundException("Task not found");
+        }
+
+        t.setStatus(status);
+        taskRepository.save(t);
+        return toDto(t);
+    }
+}
