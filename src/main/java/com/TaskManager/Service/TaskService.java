@@ -1,6 +1,5 @@
 package com.TaskManager.Service;
 
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -17,39 +16,43 @@ import com.TaskManager.Exception.ResourceNotFoundException;
 import com.TaskManager.Repository.TaskRepository;
 import com.TaskManager.Repository.UserRepository;
 
-import lombok.RequiredArgsConstructor;
-
 @Service
-@RequiredArgsConstructor
 public class TaskService {
 
     private final TaskRepository taskRepository;
     private final UserRepository userRepository;
 
+    public TaskService(TaskRepository taskRepository, UserRepository userRepository) {
+        this.taskRepository = taskRepository;
+        this.userRepository = userRepository;
+    }
+
     public TaskDTO toDto(Task t) {
-        return TaskDTO.builder()
-                .id(t.getId())
-                .title(t.getTitle())
-                .description(t.getDescription())
-                .status(t.getStatus())
-                .dueDate(t.getDueDate())
-                .ownerId(t.getOwner().getId())
-                .ownerName(t.getOwner().getName())
-                .createdAt(t.getCreatedAt())
-                .updatedAt(t.getUpdatedAt())
-                .build();
+        TaskDTO dto = new TaskDTO();
+        dto.setId(t.getId());
+        dto.setTitle(t.getTitle());
+        dto.setDescription(t.getDescription());
+        dto.setStatus(t.getStatus());
+        dto.setDueDate(t.getDueDate());
+        dto.setOwnerId(t.getOwner().getId());
+        dto.setOwnerName(t.getOwner().getName());
+        dto.setCreatedAt(t.getCreatedAt());
+        dto.setUpdatedAt(t.getUpdatedAt());
+        return dto;
     }
 
     @Transactional
     public TaskDTO createTask(TaskCreateRequest req, Long userId) {
-        User owner = userRepository.findById(userId).orElseThrow(() -> new ResourceNotFoundException("User not found"));
-        Task task = Task.builder()
-                .title(req.getTitle())
-                .description(req.getDescription())
-                .dueDate(req.getDueDate())
-                .status(Task.Status.PENDING)
-                .owner(owner)
-                .build();
+        User owner = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        Task task = new Task();
+        task.setTitle(req.getTitle());
+        task.setDescription(req.getDescription());
+        task.setDueDate(req.getDueDate());
+        task.setStatus(Task.Status.PENDING);
+        task.setOwner(owner);
+
         task = taskRepository.save(task);
         return toDto(task);
     }
@@ -57,6 +60,7 @@ public class TaskService {
     public Page<TaskDTO> listTasksForUser(User requester, int page, int size, String statusFilter) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<Task> tasksPage;
+
         if (requester.getRole() == User.Role.ADMIN) {
             if (statusFilter == null) {
                 tasksPage = taskRepository.findAll(pageable);
@@ -72,15 +76,18 @@ public class TaskService {
                 tasksPage = taskRepository.findByOwnerAndStatus(requester, status, pageable);
             }
         }
+
         return tasksPage.map(this::toDto);
     }
 
     public TaskDTO getTaskById(Long id, User requester) {
         Task t = taskRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Task not found with id: " + id));
+
         if (!t.getOwner().getId().equals(requester.getId()) && requester.getRole() != User.Role.ADMIN) {
             throw new ResourceNotFoundException("Task not found"); // hide existence
         }
+
         return toDto(t);
     }
 

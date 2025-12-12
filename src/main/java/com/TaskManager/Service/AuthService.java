@@ -1,6 +1,5 @@
 package com.TaskManager.Service;
 
-
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -15,16 +14,21 @@ import com.TaskManager.Entity.User;
 import com.TaskManager.Repository.UserRepository;
 import com.TaskManager.Security.JwtUtils;
 
-import lombok.RequiredArgsConstructor;
-
 @Service
-@RequiredArgsConstructor
 public class AuthService {
 
     private final AuthenticationManager authenticationManager;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtils jwtUtils;
+
+    public AuthService(AuthenticationManager authenticationManager, UserRepository userRepository,
+                       PasswordEncoder passwordEncoder, JwtUtils jwtUtils) {
+        this.authenticationManager = authenticationManager;
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtUtils = jwtUtils;
+    }
 
     public JwtResponse login(LoginRequest req) {
         Authentication auth = authenticationManager.authenticate(
@@ -43,12 +47,14 @@ public class AuthService {
         if (userRepository.existsByEmail(req.getEmail())) {
             throw new IllegalArgumentException("Email already registered");
         }
-        User newUser = User.builder()
-                .name(req.getName())
-                .email(req.getEmail())
-                .passwordHash(passwordEncoder.encode(req.getPassword()))
-                .role(User.Role.USER)
-                .build();
+
+        // Manual object creation instead of builder
+        User newUser = new User();
+        newUser.setName(req.getName());
+        newUser.setEmail(req.getEmail());
+        newUser.setPasswordHash(passwordEncoder.encode(req.getPassword()));
+        newUser.setRole(User.Role.USER);
+
         userRepository.save(newUser);
 
         // auto login & return token
