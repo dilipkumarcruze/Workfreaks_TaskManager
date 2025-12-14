@@ -5,6 +5,13 @@ target/
 !**/src/test/**/target/
 **/application.properties
 
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/dist/
+frontend/.env
+
+
 ### STS ###
 .apt_generated
 .classpath
